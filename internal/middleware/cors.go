@@ -17,7 +17,7 @@ func (c *CORS) Middleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := w.Header()
 		if c.originCheck(r) {
-			header.Set("Access-Control-Allow-Origin", r.Header.Get("origin"))
+			header.Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
 			if allowHeaders := r.Header.Get("Access-Control-Request-Headers"); allowHeaders != "" && allowHeaders != "null" {
 				header.Add("Access-Control-Allow-Headers", allowHeaders)
 			}
