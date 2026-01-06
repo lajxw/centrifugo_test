@@ -70,3 +70,8 @@ func transformRefreshResponse(err error, statusToCodeTransforms configtypes.Http
 	}
 	return nil, err
 }
+
+func transformCacheEmptyResponse(err error, statusToCodeTransforms configtypes.HttpStatusToCodeTransforms) (*proxyproto.NotifyCacheEmptyResponse, error) {
+	// Cache empty proxy does not use error/disconnect transforms, just return error as is.
+	return nil, err
+}

@@ -80,6 +80,16 @@ func GetSubscribeProxy(name string, p Config) (SubscribeProxy, error) {
 	return NewGRPCSubscribeProxy(name, p)
 }
 
+func GetCacheEmptyProxy(name string, p Config) (CacheEmptyProxy, error) {
+	for i, header := range p.HttpHeaders {
+		p.HttpHeaders[i] = strings.ToLower(header)
+	}
+	if isHttpEndpoint(p.Endpoint) {
+		return NewHTTPCacheEmptyProxy(p)
+	}
+	return NewGRPCCacheEmptyProxy(name, p)
+}
+
 type PerCallData struct {
 	Meta json.RawMessage
 }

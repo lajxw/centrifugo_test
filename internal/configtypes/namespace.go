@@ -182,6 +182,11 @@ type ChannelOptions struct {
 	// SubscribeStreamBidirectional enables using bidirectional stream proxy for the namespace.
 	SubscribeStreamBidirectional bool `mapstructure:"subscribe_stream_proxy_bidirectional" json:"subscribe_stream_proxy_bidirectional" envconfig:"subscribe_stream_proxy_bidirectional" yaml:"subscribe_stream_proxy_bidirectional" toml:"subscribe_stream_proxy_bidirectional"`
 
+	// CacheEmptyProxyEnabled turns on using proxy for cache empty events in namespace.
+	CacheEmptyProxyEnabled bool `mapstructure:"cache_empty_proxy_enabled" json:"cache_empty_proxy_enabled" envconfig:"cache_empty_proxy_enabled" yaml:"cache_empty_proxy_enabled" toml:"cache_empty_proxy_enabled"`
+	// CacheEmptyProxyName of proxy to use for cache empty events in namespace.
+	CacheEmptyProxyName string `mapstructure:"cache_empty_proxy_name" default:"default" json:"cache_empty_proxy_name" envconfig:"cache_empty_proxy_name" yaml:"cache_empty_proxy_name" toml:"cache_empty_proxy_name"`
+
 	Compiled `json:"-" yaml:"-" toml:"-"`
 }
 

@@ -469,6 +469,9 @@ type ChannelProxyContainer struct {
 	SubRefresh Proxy `mapstructure:"sub_refresh" json:"sub_refresh" envconfig:"sub_refresh" yaml:"sub_refresh" toml:"sub_refresh"`
 	// SubscribeStream proxy configuration.
 	SubscribeStream Proxy `mapstructure:"subscribe_stream" json:"subscribe_stream" envconfig:"subscribe_stream" yaml:"subscribe_stream" toml:"subscribe_stream"`
+
+	// CacheEmpty proxy configuration.
+	CacheEmpty Proxy `mapstructure:"cache_empty" json:"cache_empty" envconfig:"cache_empty" yaml:"cache_empty" toml:"cache_empty"`
 }
 
 type Channel struct {

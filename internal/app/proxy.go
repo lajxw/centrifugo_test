@@ -22,6 +22,8 @@ func buildProxyMap(cfg config.Config) (*client.ProxyMap, bool, error) {
 		SubscribeProxies:       map[string]proxy.SubscribeProxy{},
 		SubRefreshProxies:      map[string]proxy.SubRefreshProxy{},
 		SubscribeStreamProxies: map[string]*proxy.SubscribeStreamProxy{},
+
+		CacheEmptyProxies: map[string]proxy.CacheEmptyProxy{},
 	}
 
 	var keepHeadersInContext bool
@@ -161,6 +163,31 @@ func buildProxyMap(cfg config.Config) (*client.ProxyMap, bool, error) {
 		}
 	}
 
+	cacheEmptyProxyEnabled := cfg.Channel.WithoutNamespace.CacheEmptyProxyEnabled
+	cacheEmptyProxyName := cfg.Channel.WithoutNamespace.CacheEmptyProxyName
+	if cacheEmptyProxyEnabled {
+		var p proxy.Config
+		if cacheEmptyProxyName == config.DefaultProxyName {
+			p = cfg.Channel.Proxy.CacheEmpty
+		} else {
+			p, proxyFound = namedProxies[cacheEmptyProxyName]
+			if !proxyFound {
+				return nil, false, fmt.Errorf("cache empty proxy not found: %s", cacheEmptyProxyName)
+			}
+		}
+		if _, ok := proxyMap.CacheEmptyProxies[cacheEmptyProxyName]; !ok {
+			cep, err := proxy.GetCacheEmptyProxy(cacheEmptyProxyName, p)
+			if err != nil {
+				return nil, false, fmt.Errorf("error creating cache empty proxy %s: %w", cacheEmptyProxyName, err)
+			}
+			proxyMap.CacheEmptyProxies[cacheEmptyProxyName] = cep
+		}
+		log.Info().Str("proxy_name", cacheEmptyProxyName).Str("endpoint", tools.RedactedLogURLs(p.Endpoint)[0]).Msg("cache empty proxy enabled for channels without namespace")
+		if len(p.HttpHeaders) > 0 {
+			keepHeadersInContext = true
+		}
+	}
+
 	for _, ns := range cfg.Channel.Namespaces {
 		subscribeProxyEnabled := ns.SubscribeProxyEnabled
 		subscribeProxyName := ns.SubscribeProxyName
@@ -260,6 +287,31 @@ func buildProxyMap(cfg config.Config) (*client.ProxyMap, bool, error) {
 				proxyMap.SubscribeStreamProxies[subscribeStreamProxyName] = sp
 			}
 			log.Info().Str("proxy_name", subscribeStreamProxyName).Str("endpoint", tools.RedactedLogURLs(p.Endpoint)[0]).Str("namespace", ns.Name).Msg("subscribe stream proxy enabled for channels in namespace")
+			if len(p.HttpHeaders) > 0 {
+				keepHeadersInContext = true
+			}
+		}
+
+		cacheEmptyProxyEnabled := ns.CacheEmptyProxyEnabled
+		cacheEmptyProxyName := ns.CacheEmptyProxyName
+		if cacheEmptyProxyEnabled {
+			var p proxy.Config
+			if cacheEmptyProxyName == config.DefaultProxyName {
+				p = cfg.Channel.Proxy.CacheEmpty
+			} else {
+				p, proxyFound = namedProxies[cacheEmptyProxyName]
+				if !proxyFound {
+					return nil, false, fmt.Errorf("cache empty proxy not found: %s", cacheEmptyProxyName)
+				}
+			}
+			if _, ok := proxyMap.CacheEmptyProxies[cacheEmptyProxyName]; !ok {
+				cep, err := proxy.GetCacheEmptyProxy(cacheEmptyProxyName, p)
+				if err != nil {
+					return nil, false, fmt.Errorf("error creating cache empty proxy %s: %w", cacheEmptyProxyName, err)
+				}
+				proxyMap.CacheEmptyProxies[cacheEmptyProxyName] = cep
+			}
+			log.Info().Str("proxy_name", cacheEmptyProxyName).Str("endpoint", tools.RedactedLogURLs(p.Endpoint)[0]).Str("namespace", ns.Name).Msg("cache empty proxy enabled for channels in namespace")
 			if len(p.HttpHeaders) > 0 {
 				keepHeadersInContext = true
 			}

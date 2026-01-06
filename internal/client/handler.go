@@ -32,6 +32,8 @@ type ProxyMap struct {
 	SubscribeProxies       map[string]proxy.SubscribeProxy
 	SubRefreshProxies      map[string]proxy.SubRefreshProxy
 	SubscribeStreamProxies map[string]*proxy.SubscribeStreamProxy
+
+	CacheEmptyProxies map[string]proxy.CacheEmptyProxy
 }
 
 // Handler for client connections.
@@ -124,6 +126,26 @@ func (h *Handler) Setup() error {
 		subRefreshProxyHandler = proxy.NewSubRefreshHandler(proxy.SubRefreshHandlerConfig{
 			Proxies: h.proxyMap.SubRefreshProxies,
 		}).Handle()
+	}
+
+	if len(h.proxyMap.CacheEmptyProxies) > 0 {
+		cacheEmptyHandler := proxy.NewCacheEmptyHandler(proxy.CacheEmptyHandlerConfig{
+			Proxies: h.proxyMap.CacheEmptyProxies,
+		})
+		h.node.OnCacheEmpty(func(e centrifuge.CacheEmptyEvent) (centrifuge.CacheEmptyReply, error) {
+			resp, err := cacheEmptyHandler(context.Background(), e.Channel)
+			if err != nil {
+				log.Error().Err(err).Str("channel", e.Channel).Msg("error calling cache empty proxy")
+				return centrifuge.CacheEmptyReply{}, err
+			}
+			populated := false
+			if resp != nil && resp.Result != nil {
+				populated = resp.Result.Populated
+			}
+			return centrifuge.CacheEmptyReply{
+				Populated: populated,
+			}, nil
+		})
 	}
 
 	cfg := h.cfgContainer.Config()
