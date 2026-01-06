@@ -43,7 +43,7 @@ require (
 	github.com/twmb/franz-go/pkg/kadm v1.17.1
 	github.com/twmb/franz-go/pkg/kmsg v1.12.0
 	github.com/valyala/fasttemplate v1.2.2
-	github.com/yuin/goldmark v1.7.13
+	github.com/yuin/goldmark v1.7.15
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.64.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.64.0
 	go.opentelemetry.io/otel v1.39.0
@@ -128,7 +128,7 @@ require (
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
-	github.com/redis/rueidis v1.0.69
+	github.com/redis/rueidis v1.0.70
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/segmentio/encoding v0.5.3
 	github.com/spf13/cast v1.10.0 // indirect
