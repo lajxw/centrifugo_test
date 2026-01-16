@@ -30,6 +30,11 @@ type VerifierConfig struct {
 	// tokens generated using HMAC. Zero value means that HMAC tokens won't be allowed.
 	HMACSecretKey string
 
+	// HMACSecretKeyBackup is a list of backup/fallback HMAC secret keys used for seamless
+	// key rotation. When verifying a token, Centrifugo will first try the main HMACSecretKey,
+	// and if that fails, it will try each backup key in order.
+	HMACSecretKeyBackup []string
+
 	// RSAPublicKey is a public key used to validate connection and subscription
 	// tokens generated using RSA. Zero value means that RSA tokens won't be allowed.
 	RSAPublicKey *rsa.PublicKey
@@ -112,7 +117,7 @@ func NewTokenVerifierJWT(config VerifierConfig, cfgContainer *config.Container) 
 		log.Info().Str("endpoint", strings.Join(tools.RedactedLogURLs(config.JWKSPublicEndpoint), ",")).
 			Msg("JWKS manager created")
 	} else {
-		alg, err := newAlgorithms(config.HMACSecretKey, config.RSAPublicKey, config.ECDSAPublicKey)
+		alg, err := newAlgorithms(config.HMACSecretKey, config.HMACSecretKeyBackup, config.RSAPublicKey, config.ECDSAPublicKey)
 		if err != nil {
 			return nil, fmt.Errorf("error initializing token algorithms: %w", err)
 		}
@@ -285,18 +290,21 @@ func (j *jwksManager) verify(token *jwt.Token, tokenVars map[string]any) error {
 }
 
 type algorithms struct {
-	HS256 jwt.Verifier
-	HS384 jwt.Verifier
-	HS512 jwt.Verifier
-	RS256 jwt.Verifier
-	RS384 jwt.Verifier
-	RS512 jwt.Verifier
-	ES256 jwt.Verifier
-	ES384 jwt.Verifier
-	ES512 jwt.Verifier
+	HS256         jwt.Verifier
+	HS384         jwt.Verifier
+	HS512         jwt.Verifier
+	HS256Fallback []jwt.Verifier
+	HS384Fallback []jwt.Verifier
+	HS512Fallback []jwt.Verifier
+	RS256         jwt.Verifier
+	RS384         jwt.Verifier
+	RS512         jwt.Verifier
+	ES256         jwt.Verifier
+	ES384         jwt.Verifier
+	ES512         jwt.Verifier
 }
 
-func newAlgorithms(tokenHMACSecretKey string, rsaPubKey *rsa.PublicKey, ecdsaPubKey *ecdsa.PublicKey) (*algorithms, error) {
+func newAlgorithms(tokenHMACSecretKey string, tokenHMACSecretKeyBackup []string, rsaPubKey *rsa.PublicKey, ecdsaPubKey *ecdsa.PublicKey) (*algorithms, error) {
 	alg := &algorithms{}
 
 	var algorithms []string
@@ -319,6 +327,30 @@ func newAlgorithms(tokenHMACSecretKey string, rsaPubKey *rsa.PublicKey, ecdsaPub
 		alg.HS384 = verifierHS384
 		alg.HS512 = verifierHS512
 		algorithms = append(algorithms, []string{"HS256", "HS384", "HS512"}...)
+
+		// Create fallback verifiers for backup HMAC keys.
+		if len(tokenHMACSecretKeyBackup) > 0 {
+			for _, backupKey := range tokenHMACSecretKeyBackup {
+				if backupKey == "" {
+					continue
+				}
+				verifierHS256Backup, err := jwt.NewVerifierHS(jwt.HS256, []byte(backupKey))
+				if err != nil {
+					return nil, err
+				}
+				verifierHS384Backup, err := jwt.NewVerifierHS(jwt.HS384, []byte(backupKey))
+				if err != nil {
+					return nil, err
+				}
+				verifierHS512Backup, err := jwt.NewVerifierHS(jwt.HS512, []byte(backupKey))
+				if err != nil {
+					return nil, err
+				}
+				alg.HS256Fallback = append(alg.HS256Fallback, verifierHS256Backup)
+				alg.HS384Fallback = append(alg.HS384Fallback, verifierHS384Backup)
+				alg.HS512Fallback = append(alg.HS512Fallback, verifierHS512Backup)
+			}
+		}
 	}
 
 	// RSA.
@@ -386,13 +418,18 @@ func newAlgorithms(tokenHMACSecretKey string, rsaPubKey *rsa.PublicKey, ecdsaPub
 
 func (s *algorithms) verify(token *jwt.Token) error {
 	var verifier jwt.Verifier
+	var fallbackVerifiers []jwt.Verifier
+
 	switch token.Header().Algorithm {
 	case jwt.HS256:
 		verifier = s.HS256
+		fallbackVerifiers = s.HS256Fallback
 	case jwt.HS384:
 		verifier = s.HS384
+		fallbackVerifiers = s.HS384Fallback
 	case jwt.HS512:
 		verifier = s.HS512
+		fallbackVerifiers = s.HS512Fallback
 	case jwt.RS256:
 		verifier = s.RS256
 	case jwt.RS384:
@@ -411,7 +448,25 @@ func (s *algorithms) verify(token *jwt.Token) error {
 	if verifier == nil {
 		return fmt.Errorf("%w: %s", errDisabledAlgorithm, string(token.Header().Algorithm))
 	}
-	return verifier.Verify(token)
+
+	// Try main verifier first.
+	err := verifier.Verify(token)
+	if err == nil {
+		return nil
+	}
+
+	// If main verifier fails and we have fallback verifiers (for HMAC algorithms),
+	// try each fallback verifier in order.
+	if len(fallbackVerifiers) > 0 {
+		for _, fallbackVerifier := range fallbackVerifiers {
+			if fallbackErr := fallbackVerifier.Verify(token); fallbackErr == nil {
+				return nil
+			}
+		}
+	}
+
+	// Return the original error from the main verifier.
+	return err
 }
 
 func (verifier *VerifierJWT) verifySignature(token *jwt.Token) error {
@@ -795,7 +850,7 @@ func (verifier *VerifierJWT) Reload(config VerifierConfig) error {
 		verifier.jwksManager = &jwksManager{mng}
 		verifier.algorithms = nil
 	} else {
-		alg, err := newAlgorithms(config.HMACSecretKey, config.RSAPublicKey, config.ECDSAPublicKey)
+		alg, err := newAlgorithms(config.HMACSecretKey, config.HMACSecretKeyBackup, config.RSAPublicKey, config.ECDSAPublicKey)
 		if err != nil {
 			return err
 		}
