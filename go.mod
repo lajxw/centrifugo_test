@@ -30,8 +30,8 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/prometheus/client_golang v1.23.2
-	github.com/quic-go/quic-go v0.58.0
-	github.com/quic-go/webtransport-go v0.9.0
+	github.com/quic-go/quic-go v0.59.0
+	github.com/quic-go/webtransport-go v0.10.0
 	github.com/rakutentech/jwk-go v1.2.0
 	github.com/rs/zerolog v1.34.0
 	github.com/spf13/cobra v1.10.2
@@ -79,6 +79,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.12 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
+	github.com/dunglas/httpsfv v1.1.0 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.7 // indirect
