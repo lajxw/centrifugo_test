@@ -51,8 +51,10 @@ type Log struct {
 
 // Token common configuration.
 type Token struct {
-	HMACSecretKey      string `mapstructure:"hmac_secret_key" json:"hmac_secret_key" envconfig:"hmac_secret_key" yaml:"hmac_secret_key" toml:"hmac_secret_key"`
-	RSAPublicKey       string `mapstructure:"rsa_public_key" json:"rsa_public_key" envconfig:"rsa_public_key" yaml:"rsa_public_key" toml:"rsa_public_key"`
+	HMACSecretKey                   string `mapstructure:"hmac_secret_key" json:"hmac_secret_key" envconfig:"hmac_secret_key" yaml:"hmac_secret_key" toml:"hmac_secret_key"`
+	HMACPreviousSecretKey           string `mapstructure:"hmac_previous_secret_key" json:"hmac_previous_secret_key" envconfig:"hmac_previous_secret_key" yaml:"hmac_previous_secret_key" toml:"hmac_previous_secret_key"`
+	HMACPreviousSecretKeyValidUntil int64  `mapstructure:"hmac_previous_secret_key_valid_until" json:"hmac_previous_secret_key_valid_until" envconfig:"hmac_previous_secret_key_valid_until" yaml:"hmac_previous_secret_key_valid_until" toml:"hmac_previous_secret_key_valid_until"`
+	RSAPublicKey                    string `mapstructure:"rsa_public_key" json:"rsa_public_key" envconfig:"rsa_public_key" yaml:"rsa_public_key" toml:"rsa_public_key"`
 	ECDSAPublicKey     string `mapstructure:"ecdsa_public_key" json:"ecdsa_public_key" envconfig:"ecdsa_public_key" yaml:"ecdsa_public_key" toml:"ecdsa_public_key"`
 	JWKSPublicEndpoint string `mapstructure:"jwks_public_endpoint" json:"jwks_public_endpoint" envconfig:"jwks_public_endpoint" yaml:"jwks_public_endpoint" toml:"jwks_public_endpoint"`
 	Audience           string `mapstructure:"audience" json:"audience" envconfig:"audience" yaml:"audience" toml:"audience"`
@@ -489,7 +491,7 @@ type Channel struct {
 	HistoryMetaTTL Duration `mapstructure:"history_meta_ttl" json:"history_meta_ttl" envconfig:"history_meta_ttl" default:"720h" yaml:"history_meta_ttl" toml:"history_meta_ttl"`
 
 	// PublicationDataFormat is a global publication data format for all channels. Can be overridden in channel namespace.
-	// Empty string means default behavior (reject empty data). Possible values: "", "json", "binary".
+	// Empty string means default behavior (reject empty data). Possible values: "", "json", "json_object", "binary".
 	PublicationDataFormat string `mapstructure:"publication_data_format" json:"publication_data_format" envconfig:"publication_data_format" default:"" yaml:"publication_data_format" toml:"publication_data_format"`
 
 	// MaxLength is a maximum length of a channel name. This is a global option for all channels.
@@ -813,6 +815,13 @@ type KafkaConsumerConfig struct {
 	SASLMechanism string `mapstructure:"sasl_mechanism" json:"sasl_mechanism" envconfig:"sasl_mechanism" yaml:"sasl_mechanism" toml:"sasl_mechanism"`
 	SASLUser      string `mapstructure:"sasl_user" json:"sasl_user" envconfig:"sasl_user" yaml:"sasl_user" toml:"sasl_user"`
 	SASLPassword  string `mapstructure:"sasl_password" json:"sasl_password" envconfig:"sasl_password" yaml:"sasl_password" toml:"sasl_password"`
+
+	// InstanceID sets a stable consumer group instance ID for Kafka static membership.
+	// When set, enables the static membership protocol: during rolling restarts, a replacement
+	// consumer with the same instance ID takes over partitions seamlessly without triggering
+	// a group rebalance. This should be a stable identifier across restarts (e.g. Kubernetes pod name).
+	// When empty (default), static membership is not used.
+	InstanceID string `mapstructure:"instance_id" json:"instance_id" envconfig:"instance_id" yaml:"instance_id" toml:"instance_id"`
 
 	// MethodHeader is a header name to extract method name from Kafka message.
 	// If provided in message, then payload must be just a serialized API request object.

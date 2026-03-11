@@ -2652,6 +2652,26 @@
             "is_complex_type": false
           },
           {
+            "field": "client.token.hmac_previous_secret_key",
+            "name": "hmac_previous_secret_key",
+            "go_name": "HMACPreviousSecretKey",
+            "level": 3,
+            "type": "string",
+            "default": "",
+            "comment": "",
+            "is_complex_type": false
+          },
+          {
+            "field": "client.token.hmac_previous_secret_key_valid_until",
+            "name": "hmac_previous_secret_key_valid_until",
+            "go_name": "HMACPreviousSecretKeyValidUntil",
+            "level": 3,
+            "type": "int64",
+            "default": "",
+            "comment": "",
+            "is_complex_type": false
+          },
+          {
             "field": "client.token.rsa_public_key",
             "name": "rsa_public_key",
             "go_name": "RSAPublicKey",
@@ -2759,6 +2779,26 @@
             "go_name": "HMACSecretKey",
             "level": 3,
             "type": "string",
+            "default": "",
+            "comment": "",
+            "is_complex_type": false
+          },
+          {
+            "field": "client.subscription_token.hmac_previous_secret_key",
+            "name": "hmac_previous_secret_key",
+            "go_name": "HMACPreviousSecretKey",
+            "level": 3,
+            "type": "string",
+            "default": "",
+            "comment": "",
+            "is_complex_type": false
+          },
+          {
+            "field": "client.subscription_token.hmac_previous_secret_key_valid_until",
+            "name": "hmac_previous_secret_key_valid_until",
+            "go_name": "HMACPreviousSecretKeyValidUntil",
+            "level": 3,
+            "type": "int64",
             "default": "",
             "comment": "",
             "is_complex_type": false
@@ -5118,7 +5158,7 @@
             "level": 3,
             "type": "string",
             "default": "",
-            "comment": "PublicationDataFormat defines the format validation for publication data.\nIf empty (default) - current behavior is used, reject empty data.\nIf \"json\" - validate that data is valid JSON, return bad request if not.\nIf \"binary\" - allow empty data to be published.",
+            "comment": "PublicationDataFormat defines the format validation for publication data.\nIf empty (default) - current behavior is used, reject empty data.\nIf \"json\" - validate that data is valid JSON, return bad request if not.\nIf \"json_object\" - validate that data is valid JSON and specifically a JSON object, return bad request if not.\nIf \"binary\" - allow empty data to be published.",
             "is_complex_type": false
           },
           {
@@ -5510,7 +5550,7 @@
             "level": 3,
             "type": "string",
             "default": "",
-            "comment": "PublicationDataFormat defines the format validation for publication data.\nIf empty (default) - current behavior is used, reject empty data.\nIf \"json\" - validate that data is valid JSON, return bad request if not.\nIf \"binary\" - allow empty data to be published.",
+            "comment": "PublicationDataFormat defines the format validation for publication data.\nIf empty (default) - current behavior is used, reject empty data.\nIf \"json\" - validate that data is valid JSON, return bad request if not.\nIf \"json_object\" - validate that data is valid JSON and specifically a JSON object, return bad request if not.\nIf \"binary\" - allow empty data to be published.",
             "is_complex_type": false
           },
           {
@@ -5622,7 +5662,7 @@
         "level": 2,
         "type": "string",
         "default": "",
-        "comment": "PublicationDataFormat is a global publication data format for all channels. Can be overridden in channel namespace.\nEmpty string means default behavior (reject empty data). Possible values: \"\", \"json\", \"binary\".",
+        "comment": "PublicationDataFormat is a global publication data format for all channels. Can be overridden in channel namespace.\nEmpty string means default behavior (reject empty data). Possible values: \"\", \"json\", \"json_object\", \"binary\".",
         "is_complex_type": false
       },
       {
@@ -7267,6 +7307,16 @@
             "type": "string",
             "default": "",
             "comment": "",
+            "is_complex_type": false
+          },
+          {
+            "field": "consumers[].kafka.instance_id",
+            "name": "instance_id",
+            "go_name": "InstanceID",
+            "level": 3,
+            "type": "string",
+            "default": "",
+            "comment": "InstanceID sets a stable consumer group instance ID for Kafka static membership.\nWhen set, enables the static membership protocol: during rolling restarts, a replacement\nconsumer with the same instance ID takes over partitions seamlessly without triggering\na group rebalance. This should be a stable identifier across restarts (e.g. Kubernetes pod name).\nWhen empty (default), static membership is not used.",
             "is_complex_type": false
           },
           {
