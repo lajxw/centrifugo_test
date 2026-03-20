@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,19 +27,20 @@ const producerCloseTimeoutMs = 10000
 
 // Exporter pushes Prometheus metrics to Alibaba Cloud Log Service (SLS).
 type Exporter struct {
-	project          string
-	logstore         string
-	topic            string
-	source           string
-	// extraLabelSuffix is a pre-formatted "|k1#$#v1|k2#$#v2" string that is
-	// appended to every metric's label string. It is built once at construction
-	// time from FC_INSTANCE_ID and FC_FUNCTION_VERSION env vars.
-	extraLabelSuffix string
-	closeOnce        sync.Once
-	closeCh          chan struct{}
-	sink             chan eagle.Metrics
-	eagle            *eagle.Eagle
-	producer         *producer.Producer
+	project  string
+	logstore string
+	topic    string
+	source   string
+	// fcLabelPairs holds the pre-sanitised FC label key/value pairs
+	// ["instance_id", "<val>", "version", "<val>"] read once at startup from
+	// FC_INSTANCE_ID and FC_FUNCTION_VERSION. Pairs whose env var is empty are
+	// omitted. Included in every metric's sorted __labels__ field.
+	fcLabelPairs []string
+	closeOnce    sync.Once
+	closeCh      chan struct{}
+	sink         chan eagle.Metrics
+	eagle        *eagle.Eagle
+	producer     *producer.Producer
 }
 
 // Config for SLS Exporter.
@@ -86,19 +88,26 @@ func New(c Config) (*Exporter, error) {
 		return nil, err
 	}
 
-	// Build the extra label suffix once from FC env vars (immutable at runtime).
-	extraLabelSuffix := buildExtraLabelSuffix()
+	// Build FC label pairs once from env vars (immutable at runtime).
+	// Keys and values are pre-sanitised so no per-metric escaping is needed.
+	var fcLabelPairs []string
+	if id := os.Getenv("FC_INSTANCE_ID"); id != "" {
+		fcLabelPairs = append(fcLabelPairs, "instance_id", labelValueReplacer.Replace(id))
+	}
+	if ver := os.Getenv("FC_FUNCTION_VERSION"); ver != "" {
+		fcLabelPairs = append(fcLabelPairs, "version", labelValueReplacer.Replace(ver))
+	}
 
 	sink := make(chan eagle.Metrics)
 	exporter := &Exporter{
-		project:          c.Project,
-		logstore:         c.Logstore,
-		topic:            c.Topic,
-		source:           c.Source,
-		extraLabelSuffix: extraLabelSuffix,
-		closeCh:          make(chan struct{}),
-		sink:             sink,
-		producer:         producerInstance,
+		project:      c.Project,
+		logstore:     c.Logstore,
+		topic:        c.Topic,
+		source:       c.Source,
+		fcLabelPairs: fcLabelPairs,
+		closeCh:      make(chan struct{}),
+		sink:         sink,
+		producer:     producerInstance,
 	}
 	exporter.eagle = eagle.New(eagle.Config{
 		Gatherer: c.Gatherer,
@@ -106,27 +115,6 @@ func New(c Config) (*Exporter, error) {
 		Sink:     sink,
 	})
 	return exporter, nil
-}
-
-// buildExtraLabelSuffix builds the pre-formatted extra label string from FC env
-// vars.  It returns a string of the form "|instance_id#$#<val>|version#$#<val>"
-// (with only the pairs whose env var is non-empty included).
-func buildExtraLabelSuffix() string {
-	instanceID := os.Getenv("FC_INSTANCE_ID")
-	functionVersion := os.Getenv("FC_FUNCTION_VERSION")
-	if instanceID == "" && functionVersion == "" {
-		return ""
-	}
-	var sb strings.Builder
-	if instanceID != "" {
-		sb.WriteString("|instance_id#$#")
-		sb.WriteString(labelValueReplacer.Replace(instanceID))
-	}
-	if functionVersion != "" {
-		sb.WriteString("|version#$#")
-		sb.WriteString(labelValueReplacer.Replace(functionVersion))
-	}
-	return sb.String()
 }
 
 // Run starts the exporter and blocks until ctx is done.
@@ -160,7 +148,7 @@ func (e *Exporter) exportOnce(metrics eagle.Metrics) {
 	for _, item := range metrics.Items {
 		for _, metricValue := range item.Values {
 			metricName := buildMetricName(item, metricValue)
-			labels := buildLabels(metricValue.Labels, e.extraLabelSuffix)
+			labels := buildLabels(metricValue.Labels, e.fcLabelPairs)
 			slsLog := buildLog(now, nowNano, metricName, labels, metricValue.Value)
 			if err := e.producer.SendLog(e.project, e.logstore, e.topic, e.source, slsLog); err != nil {
 				log.Error().Err(err).Str("metric", metricName).Msg("error sending metric to Alibaba Cloud SLS")
@@ -202,39 +190,44 @@ func buildMetricName(item eagle.Metric, metricValue eagle.MetricValue) string {
 // replacer is applied to keys as well to be safe by construction.
 var labelValueReplacer = strings.NewReplacer("|", "_", "#$#", "_")
 
-// buildLabels converts a flat label slice (alternating key/value pairs) into
-// the SLS time series label format: "k1#$#v1|k2#$#v2".
-// Delimiter sequences ("|" and "#$#") in label keys and values are replaced
-// with "_" to prevent ambiguity during SLS parsing. Labels are emitted in
-// input order; SLS does not require sorted label keys.
-// extraSuffix is a pre-formatted "|k#$#v..." string appended verbatim at the end.
-func buildLabels(labelPairs []string, extraSuffix string) string {
-	if len(labelPairs) < 2 && extraSuffix == "" {
-		return ""
-	}
+// buildLabels converts a flat label slice (alternating key/value pairs) plus the
+// pre-cached FC label pairs into the SLS MetricStore __labels__ field value:
+// "k1#$#v1|k2#$#v2". All labels are sorted alphabetically by key as required
+// by the SLS MetricStore write protocol. Delimiter sequences ("|" and "#$#") in
+// label keys and values are replaced with "_".
+func buildLabels(labelPairs []string, fcLabelPairs []string) string {
 	if len(labelPairs)%2 != 0 {
 		log.Warn().Int("len", len(labelPairs)).Msg("sls: odd number of label pair elements, last element ignored")
 	}
-	var sb strings.Builder
-	if len(labelPairs) >= 2 {
-		sb.WriteString(labelValueReplacer.Replace(labelPairs[0]))
-		sb.WriteString("#$#")
-		sb.WriteString(labelValueReplacer.Replace(labelPairs[1]))
-		for i := 2; i+1 < len(labelPairs); i += 2 {
-			sb.WriteByte('|')
-			sb.WriteString(labelValueReplacer.Replace(labelPairs[i]))
-			sb.WriteString("#$#")
-			sb.WriteString(labelValueReplacer.Replace(labelPairs[i+1]))
-		}
+	n := len(labelPairs)/2 + len(fcLabelPairs)/2
+	if n == 0 {
+		return ""
 	}
-	if extraSuffix != "" {
-		if sb.Len() > 0 {
-			// extraSuffix already starts with "|"
-			sb.WriteString(extraSuffix)
-		} else if len(extraSuffix) > 1 {
-			// no base labels — strip the leading "|"
-			sb.WriteString(extraSuffix[1:])
-		}
+
+	type kv struct{ k, v string }
+	pairs := make([]kv, 0, n)
+	for i := 0; i+1 < len(labelPairs); i += 2 {
+		pairs = append(pairs, kv{
+			k: labelValueReplacer.Replace(labelPairs[i]),
+			v: labelValueReplacer.Replace(labelPairs[i+1]),
+		})
+	}
+	for i := 0; i+1 < len(fcLabelPairs); i += 2 {
+		// FC pairs are already sanitised at startup.
+		pairs = append(pairs, kv{k: fcLabelPairs[i], v: fcLabelPairs[i+1]})
+	}
+
+	sort.Slice(pairs, func(i, j int) bool { return pairs[i].k < pairs[j].k })
+
+	var sb strings.Builder
+	sb.WriteString(pairs[0].k)
+	sb.WriteString("#$#")
+	sb.WriteString(pairs[0].v)
+	for _, p := range pairs[1:] {
+		sb.WriteByte('|')
+		sb.WriteString(p.k)
+		sb.WriteString("#$#")
+		sb.WriteString(p.v)
 	}
 	return sb.String()
 }
@@ -242,10 +235,10 @@ func buildLabels(labelPairs []string, extraSuffix string) string {
 func buildLog(now uint32, nowNano, metricName, labels string, value float64) *sls.Log {
 	slsLog := &sls.Log{Time: ptrUint32(now)}
 	contents := []*sls.LogContent{
-		{Key: ptrString("time_nano"), Value: ptrString(nowNano)},
-		{Key: ptrString("name"), Value: ptrString(metricName)},
-		{Key: ptrString("value"), Value: ptrString(strconv.FormatFloat(value, 'f', 6, 64))},
-		{Key: ptrString("labels"), Value: ptrString(labels)},
+		{Key: ptrString("__time_nano__"), Value: ptrString(nowNano)},
+		{Key: ptrString("__name__"), Value: ptrString(metricName)},
+		{Key: ptrString("__value__"), Value: ptrString(strconv.FormatFloat(value, 'f', 6, 64))},
+		{Key: ptrString("__labels__"), Value: ptrString(labels)},
 	}
 	slsLog.Contents = contents
 	return slsLog
