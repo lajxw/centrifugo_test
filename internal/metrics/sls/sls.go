@@ -3,7 +3,6 @@ package sls
 
 import (
 	"context"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -12,10 +11,14 @@ import (
 	sls "github.com/aliyun/aliyun-log-go-sdk"
 	"github.com/aliyun/aliyun-log-go-sdk/producer"
 	"github.com/FZambia/eagle"
-	"github.com/golang/protobuf/proto"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog/log"
 )
+
+// ptrUint32 and ptrString replace proto.Uint32/proto.String to avoid a direct
+// dependency on the deprecated github.com/golang/protobuf package.
+func ptrUint32(v uint32) *uint32 { return &v }
+func ptrString(v string) *string { return &v }
 
 const producerCloseTimeoutMs = 10000
 
@@ -124,34 +127,43 @@ func (e *Exporter) exportOnce(metrics eagle.Metrics) {
 }
 
 func buildMetricName(item eagle.Metric, metricValue eagle.MetricValue) string {
-	parts := make([]string, 0, 4)
+	var sb strings.Builder
 	if item.Namespace != "" {
-		parts = append(parts, item.Namespace)
+		sb.WriteString(item.Namespace)
 	}
 	if item.Subsystem != "" {
-		parts = append(parts, item.Subsystem)
+		if sb.Len() > 0 {
+			sb.WriteByte('_')
+		}
+		sb.WriteString(item.Subsystem)
 	}
 	if item.Name != "" {
-		parts = append(parts, item.Name)
+		if sb.Len() > 0 {
+			sb.WriteByte('_')
+		}
+		sb.WriteString(item.Name)
 	}
 	if metricValue.Name != "" {
-		parts = append(parts, metricValue.Name)
+		if sb.Len() > 0 {
+			sb.WriteByte('_')
+		}
+		sb.WriteString(metricValue.Name)
 	}
-	return strings.Join(parts, "_")
+	return sb.String()
 }
 
-// labelValueReplacer replaces SLS label delimiter sequences in label values
-// to avoid ambiguity when parsing the encoded label string. Both "|" and "#$#"
-// are replaced with "_". Note that this means a value containing underscores
-// and a value that originally contained these delimiters will produce the same
-// output; this is an acceptable trade-off since Prometheus label values
-// rarely contain these sequences.
+// labelValueReplacer replaces SLS label delimiter sequences in label keys and
+// values to avoid ambiguity when parsing the encoded label string. Both "|" and
+// "#$#" are replaced with "_". Prometheus label names are restricted to
+// [a-zA-Z_][a-zA-Z0-9_]* and cannot normally contain these sequences; the
+// replacer is applied to keys as well to be safe by construction.
 var labelValueReplacer = strings.NewReplacer("|", "_", "#$#", "_")
 
 // buildLabels converts a flat label slice (alternating key/value pairs) into
 // the SLS time series label format: "k1#$#v1|k2#$#v2".
-// Delimiter sequences ("|" and "#$#") in label values are replaced with "_"
-// to prevent ambiguity during SLS parsing.
+// Delimiter sequences ("|" and "#$#") in label keys and values are replaced
+// with "_" to prevent ambiguity during SLS parsing. Labels are emitted in
+// input order; SLS does not require sorted label keys.
 func buildLabels(labelPairs []string) string {
 	if len(labelPairs) < 2 {
 		return ""
@@ -159,32 +171,26 @@ func buildLabels(labelPairs []string) string {
 	if len(labelPairs)%2 != 0 {
 		log.Warn().Int("len", len(labelPairs)).Msg("sls: odd number of label pair elements, last element ignored")
 	}
-	type kv struct{ k, v string }
-	pairs := make([]kv, 0, len(labelPairs)/2)
-	for i := 0; i+1 < len(labelPairs); i += 2 {
-		pairs = append(pairs, kv{labelPairs[i], labelValueReplacer.Replace(labelPairs[i+1])})
-	}
-	sort.Slice(pairs, func(i, j int) bool { return pairs[i].k < pairs[j].k })
-
 	var sb strings.Builder
-	for i, p := range pairs {
-		if i > 0 {
-			sb.WriteByte('|')
-		}
-		sb.WriteString(p.k)
+	sb.WriteString(labelValueReplacer.Replace(labelPairs[0]))
+	sb.WriteString("#$#")
+	sb.WriteString(labelValueReplacer.Replace(labelPairs[1]))
+	for i := 2; i+1 < len(labelPairs); i += 2 {
+		sb.WriteByte('|')
+		sb.WriteString(labelValueReplacer.Replace(labelPairs[i]))
 		sb.WriteString("#$#")
-		sb.WriteString(p.v)
+		sb.WriteString(labelValueReplacer.Replace(labelPairs[i+1]))
 	}
 	return sb.String()
 }
 
 func buildLog(now uint32, nowNano, metricName, labels string, value float64) *sls.Log {
-	slsLog := &sls.Log{Time: proto.Uint32(now)}
+	slsLog := &sls.Log{Time: ptrUint32(now)}
 	contents := []*sls.LogContent{
-		{Key: proto.String("time_nano"), Value: proto.String(nowNano)},
-		{Key: proto.String("name"), Value: proto.String(metricName)},
-		{Key: proto.String("value"), Value: proto.String(strconv.FormatFloat(value, 'f', 6, 64))},
-		{Key: proto.String("labels"), Value: proto.String(labels)},
+		{Key: ptrString("time_nano"), Value: ptrString(nowNano)},
+		{Key: ptrString("name"), Value: ptrString(metricName)},
+		{Key: ptrString("value"), Value: ptrString(strconv.FormatFloat(value, 'f', 6, 64))},
+		{Key: ptrString("labels"), Value: ptrString(labels)},
 	}
 	slsLog.Contents = contents
 	return slsLog

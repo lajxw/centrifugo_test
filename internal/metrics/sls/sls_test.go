@@ -65,14 +65,19 @@ func TestBuildLabels(t *testing.T) {
 			expected:   "env#$#prod",
 		},
 		{
-			name:       "two label pairs sorted by key",
+			name:       "two label pairs in input order",
 			labelPairs: []string{"zone", "us-east", "env", "prod"},
-			expected:   "env#$#prod|zone#$#us-east",
+			expected:   "zone#$#us-east|env#$#prod",
 		},
 		{
-			name:       "three label pairs sorted by key",
+			name:       "three label pairs in input order",
 			labelPairs: []string{"c", "3", "a", "1", "b", "2"},
-			expected:   "a#$#1|b#$#2|c#$#3",
+			expected:   "c#$#3|a#$#1|b#$#2",
+		},
+		{
+			name:       "delimiter in key is escaped",
+			labelPairs: []string{"ke#$#y", "val"},
+			expected:   "ke_y#$#val",
 		},
 		{
 			name:       "pipe delimiter in value is escaped",
@@ -90,9 +95,9 @@ func TestBuildLabels(t *testing.T) {
 			expected:   "key#$#a_b_c",
 		},
 		{
-			name:       "odd-length slice logs warning and handles gracefully",
-			labelPairs: []string{"key"},
-			expected:   "",
+			name:       "odd-length slice (len=3) logs warning and drops last element",
+			labelPairs: []string{"a", "1", "orphan"},
+			expected:   "a#$#1",
 		},
 	}
 
