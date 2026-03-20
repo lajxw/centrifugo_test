@@ -107,8 +107,9 @@ func (e *Exporter) close() error {
 }
 
 func (e *Exporter) exportOnce(metrics eagle.Metrics) {
-	now := uint32(time.Now().Unix())
-	nowNano := strconv.FormatInt(time.Now().UnixNano(), 10)
+	t := time.Now()
+	now := uint32(t.Unix())
+	nowNano := strconv.FormatInt(t.UnixNano(), 10)
 
 	for _, item := range metrics.Items {
 		for _, metricValue := range item.Values {
@@ -139,16 +140,29 @@ func buildMetricName(item eagle.Metric, metricValue eagle.MetricValue) string {
 	return strings.Join(parts, "_")
 }
 
+// labelValueReplacer replaces SLS label delimiter sequences in label values
+// to avoid ambiguity when parsing the encoded label string. Both "|" and "#$#"
+// are replaced with "_". Note that this means a value containing underscores
+// and a value that originally contained these delimiters will produce the same
+// output; this is an acceptable trade-off since Prometheus label values
+// rarely contain these sequences.
+var labelValueReplacer = strings.NewReplacer("|", "_", "#$#", "_")
+
 // buildLabels converts a flat label slice (alternating key/value pairs) into
 // the SLS time series label format: "k1#$#v1|k2#$#v2".
+// Delimiter sequences ("|" and "#$#") in label values are replaced with "_"
+// to prevent ambiguity during SLS parsing.
 func buildLabels(labelPairs []string) string {
 	if len(labelPairs) < 2 {
 		return ""
 	}
+	if len(labelPairs)%2 != 0 {
+		log.Warn().Int("len", len(labelPairs)).Msg("sls: odd number of label pair elements, last element ignored")
+	}
 	type kv struct{ k, v string }
 	pairs := make([]kv, 0, len(labelPairs)/2)
 	for i := 0; i+1 < len(labelPairs); i += 2 {
-		pairs = append(pairs, kv{labelPairs[i], labelPairs[i+1]})
+		pairs = append(pairs, kv{labelPairs[i], labelValueReplacer.Replace(labelPairs[i+1])})
 	}
 	sort.Slice(pairs, func(i, j int) bool { return pairs[i].k < pairs[j].k })
 

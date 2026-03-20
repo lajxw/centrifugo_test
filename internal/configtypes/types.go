@@ -321,8 +321,8 @@ type AliyunSLS struct {
 	Logstore string `mapstructure:"logstore" json:"logstore" envconfig:"logstore" yaml:"logstore" toml:"logstore"`
 	// Topic is the SLS log topic.
 	Topic string `mapstructure:"topic" json:"topic" envconfig:"topic" yaml:"topic" toml:"topic"`
-	// Source is the log source identifier.
-	Source string `mapstructure:"source" json:"source" envconfig:"source" default:"centrifugo" yaml:"source" toml:"source"`
+	// Source is the log source identifier (e.g. hostname). If empty, no source is set.
+	Source string `mapstructure:"source" json:"source" envconfig:"source" yaml:"source" toml:"source"`
 	// Interval is the interval between metric pushes.
 	Interval Duration `mapstructure:"interval" json:"interval" envconfig:"interval" default:"10s" yaml:"interval" toml:"interval"`
 }
