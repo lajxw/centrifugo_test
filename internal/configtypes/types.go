@@ -305,6 +305,28 @@ type Graphite struct {
 	Tags     bool     `mapstructure:"tags" json:"tags" envconfig:"tags" yaml:"tags" toml:"tags"`
 }
 
+// AliyunSLS is a configuration for pushing metrics to Alibaba Cloud Log Service (SLS).
+type AliyunSLS struct {
+	// Enabled enables push-mode metrics export to Alibaba Cloud SLS.
+	Enabled bool `mapstructure:"enabled" json:"enabled" envconfig:"enabled" yaml:"enabled" toml:"enabled"`
+	// Endpoint is the SLS service endpoint (e.g. https://cn-hangzhou.log.aliyuncs.com).
+	Endpoint string `mapstructure:"endpoint" json:"endpoint" envconfig:"endpoint" yaml:"endpoint" toml:"endpoint"`
+	// AccessKeyID is the Alibaba Cloud AccessKey ID.
+	AccessKeyID string `mapstructure:"access_key_id" json:"access_key_id" envconfig:"access_key_id" yaml:"access_key_id" toml:"access_key_id"`
+	// AccessKeySecret is the Alibaba Cloud AccessKey Secret.
+	AccessKeySecret string `mapstructure:"access_key_secret" json:"access_key_secret" envconfig:"access_key_secret" yaml:"access_key_secret" toml:"access_key_secret"`
+	// Project is the SLS project name.
+	Project string `mapstructure:"project" json:"project" envconfig:"project" yaml:"project" toml:"project"`
+	// Logstore is the SLS logstore name.
+	Logstore string `mapstructure:"logstore" json:"logstore" envconfig:"logstore" yaml:"logstore" toml:"logstore"`
+	// Topic is the SLS log topic.
+	Topic string `mapstructure:"topic" json:"topic" envconfig:"topic" yaml:"topic" toml:"topic"`
+	// Source is the log source identifier.
+	Source string `mapstructure:"source" json:"source" envconfig:"source" default:"centrifugo" yaml:"source" toml:"source"`
+	// Interval is the interval between metric pushes.
+	Interval Duration `mapstructure:"interval" json:"interval" envconfig:"interval" default:"10s" yaml:"interval" toml:"interval"`
+}
+
 type Emulation struct {
 	HandlerPrefix      string `mapstructure:"handler_prefix" json:"handler_prefix" envconfig:"handler_prefix" default:"/emulation" yaml:"handler_prefix" toml:"handler_prefix"`
 	MaxRequestBodySize int    `mapstructure:"max_request_body_size" json:"max_request_body_size" envconfig:"max_request_body_size" default:"65536" yaml:"max_request_body_size" toml:"max_request_body_size"`
