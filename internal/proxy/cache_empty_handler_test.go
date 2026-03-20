@@ -268,6 +268,85 @@ func TestCacheEmptyHandlerDifferentChannels(t *testing.T) {
 	}
 }
 
+// TestCacheEmptyHandlerNoRedundantCallAtCompletion verifies that goroutines arriving
+// right when the first call completes do not trigger a redundant origin call.
+// This guards against a race where Delete was called before close(done), creating a
+// window in which a new goroutine would create a fresh lock and make an extra proxy call.
+func TestCacheEmptyHandlerNoRedundantCallAtCompletion(t *testing.T) {
+	var callCount atomic.Int32
+	// readyCh is closed by the server to let the second goroutine arrive at exactly
+	// the right moment (after the first call finished but before cleanup).
+	readyCh := make(chan struct{})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := callCount.Add(1)
+		if count == 1 {
+			// Signal that the first backend call is in progress.
+			select {
+			case <-readyCh:
+			default:
+				close(readyCh)
+			}
+		}
+
+		resp := &proxyproto.NotifyCacheEmptyResponse{
+			Result: &proxyproto.NotifyCacheEmptyResult{
+				Populated: true,
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		err := json.NewEncoder(w).Encode(resp)
+		require.NoError(t, err)
+	}))
+	defer server.Close()
+
+	p, err := NewHTTPCacheEmptyProxy(Config{
+		Endpoint: server.URL,
+		Timeout:  configtypes.Duration(5 * time.Second),
+	})
+	require.NoError(t, err)
+
+	handler := NewCacheEmptyHandler(CacheEmptyHandlerConfig{
+		Proxies: map[string]CacheEmptyProxy{
+			"test": p,
+		},
+		LockTimeout: 10 * time.Second,
+	})
+
+	const numExtra = 20
+	var wg sync.WaitGroup
+
+	// First goroutine: makes the initial call.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		resp, err := handler(context.Background(), "test:channel")
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+	}()
+
+	// Wait until the first call has started, then flood with concurrent requests.
+	<-readyCh
+	wg.Add(numExtra)
+	for i := 0; i < numExtra; i++ {
+		go func() {
+			defer wg.Done()
+			resp, err := handler(context.Background(), "test:channel")
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Result)
+			require.True(t, resp.Result.Populated)
+		}()
+	}
+
+	wg.Wait()
+
+	// All concurrent requests should have coalesced into a single origin call.
+	require.Equal(t, int32(1), callCount.Load(),
+		"Expected exactly 1 proxy call; concurrent requests should reuse the in-flight result")
+}
+
 func TestCacheEmptyHandlerGRPC(t *testing.T) {
 	// Skip gRPC test for now - would require more complex setup
 	t.Skip("gRPC test not implemented yet")

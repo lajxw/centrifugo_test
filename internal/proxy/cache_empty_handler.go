@@ -63,9 +63,13 @@ func (h *CacheEmptyHandler) handle(ctx context.Context, channel string) (*proxyp
 	if isFirstCall {
 		// This is the first call for this channel, we should make the proxy call
 		defer func() {
-			// Clean up the lock after we're done
-			h.channelLocks.Delete(channel)
+			// Signal completion first so waiting goroutines can read the result
+			// immediately, and any goroutine arriving between close and Delete
+			// can also get the cached result without making a redundant origin call.
 			close(lock.done)
+			// Remove from map after signaling so in-flight waiters find a closed
+			// (already-done) lock rather than creating a brand-new one.
+			h.channelLocks.Delete(channel)
 		}()
 
 		req := &proxyproto.NotifyCacheEmptyRequest{
