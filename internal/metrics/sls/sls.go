@@ -3,6 +3,8 @@ package sls
 
 import (
 	"context"
+	"errors"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,18 +26,27 @@ const producerCloseTimeoutMs = 10000
 
 // Exporter pushes Prometheus metrics to Alibaba Cloud Log Service (SLS).
 type Exporter struct {
-	project  string
-	logstore string
-	topic    string
-	source   string
-	closeOnce sync.Once
-	closeCh  chan struct{}
-	sink     chan eagle.Metrics
-	eagle    *eagle.Eagle
-	producer *producer.Producer
+	project          string
+	logstore         string
+	topic            string
+	source           string
+	// extraLabelSuffix is a pre-formatted "|k1#$#v1|k2#$#v2" string that is
+	// appended to every metric's label string. It is built once at construction
+	// time from FC_INSTANCE_ID and FC_FUNCTION_VERSION env vars.
+	extraLabelSuffix string
+	closeOnce        sync.Once
+	closeCh          chan struct{}
+	sink             chan eagle.Metrics
+	eagle            *eagle.Eagle
+	producer         *producer.Producer
 }
 
 // Config for SLS Exporter.
+// Alibaba Cloud credentials are NOT part of the config; they are read from the
+// following environment variables at startup (values never change at runtime):
+//   - ALIBABA_CLOUD_ACCESS_KEY_ID     — AccessKey ID
+//   - ALIBABA_CLOUD_ACCESS_KEY_SECRET — AccessKey Secret
+//   - ALIBABA_CLOUD_SECURITY_TOKEN    — STS security token (optional)
 type Config struct {
 	// Gatherer is the Prometheus gatherer used to collect metrics.
 	Gatherer prometheus.Gatherer
@@ -43,10 +54,6 @@ type Config struct {
 	Interval time.Duration
 	// Endpoint is the SLS service endpoint (e.g. https://cn-hangzhou.log.aliyuncs.com).
 	Endpoint string
-	// AccessKeyID is the Alibaba Cloud AccessKey ID.
-	AccessKeyID string
-	// AccessKeySecret is the Alibaba Cloud AccessKey Secret.
-	AccessKeySecret string
 	// Project is the SLS project name.
 	Project string
 	// Logstore is the SLS logstore name.
@@ -58,25 +65,40 @@ type Config struct {
 }
 
 // New creates a new SLS Exporter.
+// Credentials are read once from environment variables:
+//   - ALIBABA_CLOUD_ACCESS_KEY_ID, ALIBABA_CLOUD_ACCESS_KEY_SECRET, ALIBABA_CLOUD_SECURITY_TOKEN
+//
+// Extra labels are read once from FC_INSTANCE_ID and FC_FUNCTION_VERSION.
 func New(c Config) (*Exporter, error) {
+	accessKeyID := os.Getenv("ALIBABA_CLOUD_ACCESS_KEY_ID")
+	accessKeySecret := os.Getenv("ALIBABA_CLOUD_ACCESS_KEY_SECRET")
+	securityToken := os.Getenv("ALIBABA_CLOUD_SECURITY_TOKEN")
+
+	if accessKeyID == "" || accessKeySecret == "" {
+		return nil, errors.New("aliyun_sls: ALIBABA_CLOUD_ACCESS_KEY_ID and ALIBABA_CLOUD_ACCESS_KEY_SECRET environment variables are required")
+	}
+
 	producerConfig := producer.GetDefaultProducerConfig()
 	producerConfig.Endpoint = c.Endpoint
-	producerConfig.AccessKeyID = c.AccessKeyID       //nolint:staticcheck // SLS SDK v0.1.x uses deprecated field names
-	producerConfig.AccessKeySecret = c.AccessKeySecret //nolint:staticcheck // SLS SDK v0.1.x uses deprecated field names
+	producerConfig.CredentialsProvider = sls.NewStaticCredentialsProvider(accessKeyID, accessKeySecret, securityToken)
 	producerInstance, err := producer.NewProducer(producerConfig)
 	if err != nil {
 		return nil, err
 	}
 
+	// Build the extra label suffix once from FC env vars (immutable at runtime).
+	extraLabelSuffix := buildExtraLabelSuffix()
+
 	sink := make(chan eagle.Metrics)
 	exporter := &Exporter{
-		project:  c.Project,
-		logstore: c.Logstore,
-		topic:    c.Topic,
-		source:   c.Source,
-		closeCh:  make(chan struct{}),
-		sink:     sink,
-		producer: producerInstance,
+		project:          c.Project,
+		logstore:         c.Logstore,
+		topic:            c.Topic,
+		source:           c.Source,
+		extraLabelSuffix: extraLabelSuffix,
+		closeCh:          make(chan struct{}),
+		sink:             sink,
+		producer:         producerInstance,
 	}
 	exporter.eagle = eagle.New(eagle.Config{
 		Gatherer: c.Gatherer,
@@ -84,6 +106,27 @@ func New(c Config) (*Exporter, error) {
 		Sink:     sink,
 	})
 	return exporter, nil
+}
+
+// buildExtraLabelSuffix builds the pre-formatted extra label string from FC env
+// vars.  It returns a string of the form "|instance_id#$#<val>|version#$#<val>"
+// (with only the pairs whose env var is non-empty included).
+func buildExtraLabelSuffix() string {
+	instanceID := os.Getenv("FC_INSTANCE_ID")
+	functionVersion := os.Getenv("FC_FUNCTION_VERSION")
+	if instanceID == "" && functionVersion == "" {
+		return ""
+	}
+	var sb strings.Builder
+	if instanceID != "" {
+		sb.WriteString("|instance_id#$#")
+		sb.WriteString(labelValueReplacer.Replace(instanceID))
+	}
+	if functionVersion != "" {
+		sb.WriteString("|version#$#")
+		sb.WriteString(labelValueReplacer.Replace(functionVersion))
+	}
+	return sb.String()
 }
 
 // Run starts the exporter and blocks until ctx is done.
@@ -117,7 +160,7 @@ func (e *Exporter) exportOnce(metrics eagle.Metrics) {
 	for _, item := range metrics.Items {
 		for _, metricValue := range item.Values {
 			metricName := buildMetricName(item, metricValue)
-			labels := buildLabels(metricValue.Labels)
+			labels := buildLabels(metricValue.Labels, e.extraLabelSuffix)
 			slsLog := buildLog(now, nowNano, metricName, labels, metricValue.Value)
 			if err := e.producer.SendLog(e.project, e.logstore, e.topic, e.source, slsLog); err != nil {
 				log.Error().Err(err).Str("metric", metricName).Msg("error sending metric to Alibaba Cloud SLS")
@@ -164,22 +207,34 @@ var labelValueReplacer = strings.NewReplacer("|", "_", "#$#", "_")
 // Delimiter sequences ("|" and "#$#") in label keys and values are replaced
 // with "_" to prevent ambiguity during SLS parsing. Labels are emitted in
 // input order; SLS does not require sorted label keys.
-func buildLabels(labelPairs []string) string {
-	if len(labelPairs) < 2 {
+// extraSuffix is a pre-formatted "|k#$#v..." string appended verbatim at the end.
+func buildLabels(labelPairs []string, extraSuffix string) string {
+	if len(labelPairs) < 2 && extraSuffix == "" {
 		return ""
 	}
 	if len(labelPairs)%2 != 0 {
 		log.Warn().Int("len", len(labelPairs)).Msg("sls: odd number of label pair elements, last element ignored")
 	}
 	var sb strings.Builder
-	sb.WriteString(labelValueReplacer.Replace(labelPairs[0]))
-	sb.WriteString("#$#")
-	sb.WriteString(labelValueReplacer.Replace(labelPairs[1]))
-	for i := 2; i+1 < len(labelPairs); i += 2 {
-		sb.WriteByte('|')
-		sb.WriteString(labelValueReplacer.Replace(labelPairs[i]))
+	if len(labelPairs) >= 2 {
+		sb.WriteString(labelValueReplacer.Replace(labelPairs[0]))
 		sb.WriteString("#$#")
-		sb.WriteString(labelValueReplacer.Replace(labelPairs[i+1]))
+		sb.WriteString(labelValueReplacer.Replace(labelPairs[1]))
+		for i := 2; i+1 < len(labelPairs); i += 2 {
+			sb.WriteByte('|')
+			sb.WriteString(labelValueReplacer.Replace(labelPairs[i]))
+			sb.WriteString("#$#")
+			sb.WriteString(labelValueReplacer.Replace(labelPairs[i+1]))
+		}
+	}
+	if extraSuffix != "" {
+		if sb.Len() > 0 {
+			// extraSuffix already starts with "|"
+			sb.WriteString(extraSuffix)
+		} else if len(extraSuffix) > 1 {
+			// no base labels — strip the leading "|"
+			sb.WriteString(extraSuffix[1:])
+		}
 	}
 	return sb.String()
 }

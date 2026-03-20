@@ -306,15 +306,15 @@ type Graphite struct {
 }
 
 // AliyunSLS is a configuration for pushing metrics to Alibaba Cloud Log Service (SLS).
+// Credentials are read from the environment at startup:
+//   - ALIBABA_CLOUD_ACCESS_KEY_ID
+//   - ALIBABA_CLOUD_ACCESS_KEY_SECRET
+//   - ALIBABA_CLOUD_SECURITY_TOKEN (optional, for STS temporary credentials)
 type AliyunSLS struct {
 	// Enabled enables push-mode metrics export to Alibaba Cloud SLS.
 	Enabled bool `mapstructure:"enabled" json:"enabled" envconfig:"enabled" yaml:"enabled" toml:"enabled"`
 	// Endpoint is the SLS service endpoint (e.g. https://cn-hangzhou.log.aliyuncs.com).
 	Endpoint string `mapstructure:"endpoint" json:"endpoint" envconfig:"endpoint" yaml:"endpoint" toml:"endpoint"`
-	// AccessKeyID is the Alibaba Cloud AccessKey ID.
-	AccessKeyID string `mapstructure:"access_key_id" json:"access_key_id" envconfig:"access_key_id" yaml:"access_key_id" toml:"access_key_id"`
-	// AccessKeySecret is the Alibaba Cloud AccessKey Secret.
-	AccessKeySecret string `mapstructure:"access_key_secret" json:"access_key_secret" envconfig:"access_key_secret" yaml:"access_key_secret" toml:"access_key_secret"`
 	// Project is the SLS project name.
 	Project string `mapstructure:"project" json:"project" envconfig:"project" yaml:"project" toml:"project"`
 	// Logstore is the SLS logstore name.
