@@ -220,6 +220,14 @@ func Run(cmd *cobra.Command, configFile string) {
 		serviceManager.Register(graphiteExporter(cfg, nodeCfg))
 	}
 
+	if cfg.AliyunSLS.Enabled {
+		slsExp, err := aliyunSLSExporter(cfg)
+		if err != nil {
+			log.Fatal().Err(err).Msg("error creating Alibaba Cloud SLS metrics exporter")
+		}
+		serviceManager.Register(slsExp)
+	}
+
 	var statsSender *usage.Sender
 	if !cfg.UsageStats.Disabled {
 		statsSender = usage.NewSender(node, cfgContainer, usage.Features{
