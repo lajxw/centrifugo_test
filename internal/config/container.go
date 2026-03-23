@@ -92,17 +92,14 @@ func (n *Container) namespaceName(config Config, ch string) (string, string) {
 }
 
 // ChannelNamespace returns the namespace name extracted from the given channel name.
-// Returns "default" for channels that belong to the default (unnamed) namespace or
-// when the channel has an unknown/unconfigured namespace prefix. Using a non-empty
-// sentinel value ensures the label is preserved by metric exporters that drop
-// labels with empty values (e.g. the eagle library used by the SLS exporter).
-// Only returns a configured namespace name when it matches a known namespace,
-// preventing cardinality explosion from arbitrary client-provided channel prefixes.
+// Returns an empty string for channels that belong to the default (unnamed) namespace.
+// Only returns the namespace name if it matches a configured namespace, preventing
+// cardinality explosion from arbitrary client-provided channel prefixes.
 // Delegates to ChannelOptions so the result benefits from channelOptionsCache.
 func (n *Container) ChannelNamespace(ch string) string {
 	nsName, _, _, ok, _ := n.ChannelOptions(ch)
 	if !ok || nsName == "" {
-		return "default"
+		return ""
 	}
 	return nsName
 }
