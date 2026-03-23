@@ -18,7 +18,6 @@ func centrifugeNodeConfig(version string, edition string, cfgContainer *config.C
 	cfg.Metrics = centrifuge.MetricsConfig{
 		MetricsNamespace:                     "centrifugo",
 		EnableRecoveredPublicationsHistogram: appCfg.Prometheus.RecoveredPublicationsHistogram,
-		GetChannelNamespaceLabel:             cfgContainer.ChannelNamespace,
 	}
 	cfg.Name = nodeName(appCfg)
 	cfg.ChannelMaxLength = appCfg.Channel.MaxLength

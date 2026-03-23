@@ -318,40 +318,6 @@ func TestPublicationDataFormatInheritance(t *testing.T) {
 	})
 }
 
-func TestChannelNamespace(t *testing.T) {
-	c := defaultConfig(t)
-	c.Channel.Namespaces = []configtypes.ChannelNamespace{
-		{Name: "chat"},
-		{Name: "notifications"},
-	}
-	container, err := NewContainer(c)
-	require.NoError(t, err)
-
-	t.Run("configured namespace is returned", func(t *testing.T) {
-		require.Equal(t, "chat", container.ChannelNamespace("chat:room1"))
-		require.Equal(t, "notifications", container.ChannelNamespace("notifications:user42"))
-	})
-
-	t.Run("unknown namespace prefix returns empty string", func(t *testing.T) {
-		// Prevents cardinality explosion from arbitrary client-provided prefixes.
-		require.Equal(t, "", container.ChannelNamespace("unknown:room1"))
-		require.Equal(t, "", container.ChannelNamespace("attacker:anything"))
-	})
-
-	t.Run("channel without namespace boundary returns empty string", func(t *testing.T) {
-		require.Equal(t, "", container.ChannelNamespace("plainChannel"))
-	})
-
-	t.Run("private prefix is stripped before namespace extraction", func(t *testing.T) {
-		// Default PrivatePrefix is "$".
-		require.Equal(t, "chat", container.ChannelNamespace("$chat:private-room"))
-	})
-
-	t.Run("default namespace channel returns empty string", func(t *testing.T) {
-		require.Equal(t, "", container.ChannelNamespace("channel"))
-	})
-}
-
 var testConfig Config
 
 func BenchmarkContainer_Config(b *testing.B) {

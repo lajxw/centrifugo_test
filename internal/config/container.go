@@ -91,19 +91,6 @@ func (n *Container) namespaceName(config Config, ch string) (string, string) {
 	return "", ch
 }
 
-// ChannelNamespace returns the namespace name extracted from the given channel name.
-// Returns an empty string for channels that belong to the default (unnamed) namespace.
-// Only returns the namespace name if it matches a configured namespace, preventing
-// cardinality explosion from arbitrary client-provided channel prefixes.
-// Delegates to ChannelOptions so the result benefits from channelOptionsCache.
-func (n *Container) ChannelNamespace(ch string) string {
-	nsName, _, _, ok, _ := n.ChannelOptions(ch)
-	if !ok || nsName == "" {
-		return ""
-	}
-	return nsName
-}
-
 type channelOptionsResult struct {
 	nsName string
 	rest   string

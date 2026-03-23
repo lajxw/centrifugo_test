@@ -100,8 +100,6 @@ type Config struct {
 	OpenTelemetry configtypes.OpenTelemetry `mapstructure:"opentelemetry" json:"opentelemetry" envconfig:"opentelemetry" toml:"opentelemetry" yaml:"opentelemetry"`
 	// Graphite is a configuration for export metrics to Graphite.
 	Graphite configtypes.Graphite `mapstructure:"graphite" json:"graphite" envconfig:"graphite" toml:"graphite" yaml:"graphite"`
-	// AliyunSLS is a configuration for pushing metrics to Alibaba Cloud Log Service (SLS).
-	AliyunSLS configtypes.AliyunSLS `mapstructure:"aliyun_sls" json:"aliyun_sls" envconfig:"aliyun_sls" toml:"aliyun_sls" yaml:"aliyun_sls"`
 	// UsageStats is a configuration for usage stats sending.
 	UsageStats configtypes.UsageStats `mapstructure:"usage_stats" json:"usage_stats" envconfig:"usage_stats" toml:"usage_stats" yaml:"usage_stats"`
 	// Node is a configuration for Centrifugo Node as part of cluster.
