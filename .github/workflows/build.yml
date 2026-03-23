@@ -1,6 +1,7 @@
 name: build
 on:
   workflow_dispatch:
+
 jobs:
   build:
     name: Build with Go ${{ matrix.go-version }}
@@ -19,5 +20,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Build
-        run: make build
+      - name: Install gox
+        run: go install github.com/mitchellh/gox@latest
+
+      - name: Build for multiple platforms
+        run: |
+          gox -os="windows linux darwin" -arch="amd64 arm64" -output="dist/{{.Dir}}-{{.OS}}-{{.Arch}}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: dist/
