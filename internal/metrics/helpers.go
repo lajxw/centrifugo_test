@@ -37,20 +37,3 @@ func InitConsumerMetrics(consumerName string) {
 	ConsumerProcessedTotal.WithLabelValues(consumerName).Add(0)
 	ConsumerErrorsTotal.WithLabelValues(consumerName).Add(0)
 }
-
-// Channel metric helper functions
-
-// IncChannelSubscribe increments the channel subscribe counter for the given namespace and user.
-func IncChannelSubscribe(namespace, user string) {
-	ChannelSubscribeTotal.WithLabelValues(namespace, user).Inc()
-}
-
-// IncChannelUnsubscribe increments the channel unsubscribe counter for the given namespace and user.
-func IncChannelUnsubscribe(namespace, user string) {
-	ChannelUnsubscribeTotal.WithLabelValues(namespace, user).Inc()
-}
-
-// IncChannelPublish increments the channel publish counter for the given namespace and user.
-func IncChannelPublish(namespace, user string) {
-	ChannelPublishTotal.WithLabelValues(namespace, user).Inc()
-}

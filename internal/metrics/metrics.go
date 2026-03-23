@@ -42,11 +42,6 @@ type Registry struct {
 	// Middleware metrics
 	connLimitReached  prometheus.Counter
 	httpRequestsTotal *prometheus.CounterVec
-
-	// Channel metrics
-	channelSubscribeTotal   *prometheus.CounterVec
-	channelUnsubscribeTotal *prometheus.CounterVec
-	channelPublishTotal     *prometheus.CounterVec
 }
 
 // Init initializes the metrics registry with the provided configuration.
@@ -75,10 +70,6 @@ func Init(cfg Config) error {
 
 	ConnLimitReached = reg.connLimitReached
 	HTTPRequestsTotal = reg.httpRequestsTotal
-
-	ChannelSubscribeTotal = reg.channelSubscribeTotal
-	ChannelUnsubscribeTotal = reg.channelUnsubscribeTotal
-	ChannelPublishTotal = reg.channelPublishTotal
 
 	return nil
 }
@@ -208,31 +199,6 @@ func newRegistry(cfg Config) (*Registry, error) {
 		[]string{"path", "method", "status"},
 	)
 
-	// Channel metrics
-	m.channelSubscribeTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace:   metricsNamespace,
-		Subsystem:   "channel",
-		Name:        "subscribe_total",
-		Help:        "Total number of successful channel subscriptions by namespace and user.",
-		ConstLabels: constLabels,
-	}, []string{"namespace", "user"})
-
-	m.channelUnsubscribeTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace:   metricsNamespace,
-		Subsystem:   "channel",
-		Name:        "unsubscribe_total",
-		Help:        "Total number of channel unsubscriptions by namespace and user.",
-		ConstLabels: constLabels,
-	}, []string{"namespace", "user"})
-
-	m.channelPublishTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace:   metricsNamespace,
-		Subsystem:   "channel",
-		Name:        "publish_total",
-		Help:        "Total number of successful client-side channel publications by namespace and user.",
-		ConstLabels: constLabels,
-	}, []string{"namespace", "user"})
-
 	// Register all metrics
 	var alreadyRegistered prometheus.AlreadyRegisteredError
 
@@ -249,9 +215,6 @@ func newRegistry(cfg Config) (*Registry, error) {
 		m.consumerErrorsTotal,
 		m.connLimitReached,
 		m.httpRequestsTotal,
-		m.channelSubscribeTotal,
-		m.channelUnsubscribeTotal,
-		m.channelPublishTotal,
 	}
 
 	for _, collector := range collectors {

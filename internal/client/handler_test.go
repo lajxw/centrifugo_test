@@ -5,31 +5,20 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/centrifugal/centrifugo/v6/internal/config"
 	"github.com/centrifugal/centrifugo/v6/internal/configtypes"
 	"github.com/centrifugal/centrifugo/v6/internal/jwtverify"
-	"github.com/centrifugal/centrifugo/v6/internal/metrics"
 	"github.com/centrifugal/centrifugo/v6/internal/proxy"
 	"github.com/centrifugal/centrifugo/v6/internal/tools"
 
 	"github.com/centrifugal/centrifuge"
 	"github.com/centrifugal/protocol"
 	"github.com/cristalhq/jwt/v5"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
-
-func TestMain(m *testing.M) {
-	registry := prometheus.NewRegistry()
-	_ = metrics.Init(metrics.Config{
-		Registerer: registry,
-	})
-	os.Exit(m.Run())
-}
 
 func generateTestRSAKeys(t *testing.T) (*rsa.PrivateKey, *rsa.PublicKey) {
 	reader := rand.Reader
