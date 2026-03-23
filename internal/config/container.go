@@ -93,9 +93,19 @@ func (n *Container) namespaceName(config Config, ch string) (string, string) {
 
 // ChannelNamespace returns the namespace name extracted from the given channel name.
 // Returns an empty string for channels that belong to the default (unnamed) namespace.
+// Only returns the namespace name if it matches a configured namespace, preventing
+// cardinality explosion from arbitrary client-provided channel prefixes.
 func (n *Container) ChannelNamespace(ch string) string {
 	cfg := n.configValue.Load().(Config)
 	nsName, _ := n.namespaceName(cfg, ch)
+	if nsName == "" {
+		return ""
+	}
+	// Only emit the label when the namespace is actually configured.
+	_, ok, _ := channelOpts(&cfg, nsName)
+	if !ok {
+		return ""
+	}
 	return nsName
 }
 
