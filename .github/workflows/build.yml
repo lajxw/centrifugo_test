@@ -27,8 +27,8 @@ jobs:
         run: |
           gox -os="windows linux darwin" -arch="amd64 arm64" -output="dist/{{.Dir}}-{{.OS}}-{{.Arch}}"
 
-      - name: Upload artifacts
+      - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
-          name: binaries
+          name: go-binaries-${{ matrix.go-version }}
           path: dist/
