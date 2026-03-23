@@ -29,10 +29,3 @@ var (
 	ConnLimitReached  prometheus.Counter
 	HTTPRequestsTotal *prometheus.CounterVec
 )
-
-// Channel metrics - exported for use by client package
-var (
-	ChannelSubscribeTotal   *prometheus.CounterVec
-	ChannelUnsubscribeTotal *prometheus.CounterVec
-	ChannelPublishTotal     *prometheus.CounterVec
-)
