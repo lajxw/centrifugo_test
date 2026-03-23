@@ -12,6 +12,7 @@ import (
 	"github.com/centrifugal/centrifugo/v6/internal/configtypes"
 	"github.com/centrifugal/centrifugo/v6/internal/jwtverify"
 	"github.com/centrifugal/centrifugo/v6/internal/logging"
+	"github.com/centrifugal/centrifugo/v6/internal/metrics"
 	"github.com/centrifugal/centrifugo/v6/internal/proxy"
 	"github.com/centrifugal/centrifugo/v6/internal/subsource"
 
@@ -230,6 +231,8 @@ func (h *Handler) Setup() error {
 		})
 
 		client.OnUnsubscribe(func(e centrifuge.UnsubscribeEvent) {
+			nsName, _, _, _, _ := h.cfgContainer.ChannelOptions(e.Channel)
+			metrics.IncChannelUnsubscribe(nsName, client.UserID())
 			if len(h.proxyMap.SubscribeStreamProxies) > 0 {
 				storage, release := client.AcquireStorage()
 				streamCancelKey := "stream_cancel_" + e.Channel
@@ -661,7 +664,7 @@ func (h *Handler) OnSubscribe(c Client, e centrifuge.SubscribeEvent, subscribePr
 		return centrifuge.SubscribeReply{}, SubscribeExtra{}, centrifuge.ErrorUnknownChannel
 	}
 
-	_, rest, chOpts, found, err := h.cfgContainer.ChannelOptions(e.Channel)
+	nsName, rest, chOpts, found, err := h.cfgContainer.ChannelOptions(e.Channel)
 	if err != nil {
 		log.Info().Err(err).Str("channel", e.Channel).Str("client", c.ID()).Str("user", c.UserID()).Msg("error getting channel options")
 		return centrifuge.SubscribeReply{}, SubscribeExtra{}, err
@@ -740,6 +743,9 @@ func (h *Handler) OnSubscribe(c Client, e centrifuge.SubscribeEvent, subscribePr
 		if chOpts.SubRefreshProxyEnabled {
 			r.ClientSideRefresh = false
 		}
+		if err == nil {
+			metrics.IncChannelSubscribe(nsName, c.UserID())
+		}
 		return r, SubscribeExtra{}, err
 	} else if (chOpts.SubscribeStreamProxyEnabled) && !isUserLimitedChannel {
 		if subscribeStreamHandlerFunc == nil {
@@ -755,6 +761,9 @@ func (h *Handler) OnSubscribe(c Client, e centrifuge.SubscribeEvent, subscribePr
 		}
 		if chOpts.SubRefreshProxyEnabled {
 			r.ClientSideRefresh = false
+		}
+		if err == nil {
+			metrics.IncChannelSubscribe(nsName, c.UserID())
 		}
 		return r, SubscribeExtra{}, err
 	} else if chOpts.SubscribeForClient && (c.UserID() != "" || chOpts.SubscribeForAnonymous) && !isUserLimitedChannel {
@@ -782,6 +791,7 @@ func (h *Handler) OnSubscribe(c Client, e centrifuge.SubscribeEvent, subscribePr
 		options.PushJoinLeave = true
 	}
 
+	metrics.IncChannelSubscribe(nsName, c.UserID())
 	return centrifuge.SubscribeReply{
 		Options:           options,
 		ClientSideRefresh: !chOpts.SubRefreshProxyEnabled,
@@ -792,7 +802,7 @@ func (h *Handler) OnSubscribe(c Client, e centrifuge.SubscribeEvent, subscribePr
 func (h *Handler) OnPublish(c Client, e centrifuge.PublishEvent, publishProxyHandler proxy.PublishHandlerFunc) (centrifuge.PublishReply, error) {
 	cfg := h.cfgContainer.Config()
 
-	_, rest, chOpts, found, err := h.cfgContainer.ChannelOptions(e.Channel)
+	nsName, rest, chOpts, found, err := h.cfgContainer.ChannelOptions(e.Channel)
 	if err != nil {
 		log.Error().Err(err).Str("channel", e.Channel).Str("client", c.ID()).Str("user", c.UserID()).Msg("error getting channel options")
 		return centrifuge.PublishReply{}, err
@@ -857,6 +867,8 @@ func (h *Handler) OnPublish(c Client, e centrifuge.PublishEvent, publishProxyHan
 	)
 	if err != nil {
 		log.Error().Err(err).Str("channel", e.Channel).Str("client", c.ID()).Str("user", c.UserID()).Msg("error publishing message")
+	} else {
+		metrics.IncChannelPublish(nsName, c.UserID())
 	}
 	return centrifuge.PublishReply{Result: &result}, err
 }
