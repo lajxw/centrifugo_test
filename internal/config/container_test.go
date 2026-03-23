@@ -332,14 +332,16 @@ func TestChannelNamespace(t *testing.T) {
 		require.Equal(t, "notifications", container.ChannelNamespace("notifications:user42"))
 	})
 
-	t.Run("unknown namespace prefix returns empty string", func(t *testing.T) {
+	t.Run("unknown namespace prefix returns default", func(t *testing.T) {
 		// Prevents cardinality explosion from arbitrary client-provided prefixes.
-		require.Equal(t, "", container.ChannelNamespace("unknown:room1"))
-		require.Equal(t, "", container.ChannelNamespace("attacker:anything"))
+		// Returns "default" instead of "" so the label is preserved by exporters
+		// that drop empty-valued labels (e.g. the eagle library used by SLS).
+		require.Equal(t, "default", container.ChannelNamespace("unknown:room1"))
+		require.Equal(t, "default", container.ChannelNamespace("attacker:anything"))
 	})
 
-	t.Run("channel without namespace boundary returns empty string", func(t *testing.T) {
-		require.Equal(t, "", container.ChannelNamespace("plainChannel"))
+	t.Run("channel without namespace boundary returns default", func(t *testing.T) {
+		require.Equal(t, "default", container.ChannelNamespace("plainChannel"))
 	})
 
 	t.Run("private prefix is stripped before namespace extraction", func(t *testing.T) {
@@ -347,8 +349,8 @@ func TestChannelNamespace(t *testing.T) {
 		require.Equal(t, "chat", container.ChannelNamespace("$chat:private-room"))
 	})
 
-	t.Run("default namespace channel returns empty string", func(t *testing.T) {
-		require.Equal(t, "", container.ChannelNamespace("channel"))
+	t.Run("default namespace channel returns default", func(t *testing.T) {
+		require.Equal(t, "default", container.ChannelNamespace("channel"))
 	})
 }
 
