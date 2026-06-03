@@ -31,7 +31,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/prometheus/client_golang v1.23.2
-	github.com/quic-go/quic-go v0.59.0
+	github.com/quic-go/quic-go v0.59.1
 	github.com/quic-go/webtransport-go v0.10.0
 	github.com/rakutentech/jwk-go v1.2.0
 	github.com/rs/zerolog v1.34.0
